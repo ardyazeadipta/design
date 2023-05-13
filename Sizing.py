@@ -138,18 +138,18 @@ print(f'\nThe takeoff weight of the aircraft is {W0_guess:.0f} lbs.')
 print(f'The empty weight of the aircraft is {We:.0f} lbs.')
 
 ### Wing loading and power loading ###
-## Stall Speed ##
 
 
 ## Takeoff Distance ##
-# Define TOP fitting function as quadratic
+# Define fitting function as quadratic
 def func(y, a, b, c):
     return a * y**2 + b * y + c
 
-# Load TOP data
-TOP_data = np.genfromtxt('TOP.csv', delimiter=',', skip_header=1, invalid_raise=False)
+def valid_indices(x):
+    return np.nonzero(~np.isnan(x))
 
-# Extract data
+# Load and extract TOP data
+TOP_data = np.genfromtxt('TOP.csv', delimiter=',', skip_header=1, invalid_raise=False)
 TO_Parameter = TOP_data[:,0]
 TO_Dist_Prop_GroundRoll = TOP_data[:,1] * 1000
 TO_Dist_Prop_50ft = TOP_data[:,2] * 1000
@@ -159,18 +159,17 @@ TO_Dist_Jet_2eng_BFL = TOP_data[:,5] * 1000
 TO_Dist_Jet_3eng_BFL = TOP_data[:,6] * 1000
 TO_Dist_Jet_4eng_BFL = TOP_data[:,7] * 1000
 
-print('TO_Dist_Prop_GroundRoll')
-print('TO_Dist_Prop_50ft')
-print('TO_Dist_Jet_GroundRoll')
-print('TO_Dist_Jet_50ft')
-print('TO_Dist_Jet_2eng_BFL')
-print('TO_Dist_Jet_3eng_BFL')
-print('TO_Dist_Jet_4eng_BFL')
+if Engine_type == 'prop':
+    print('TO_Dist_Prop_GroundRoll')
+    print('TO_Dist_Prop_50ft')
+else:
+    print('TO_Dist_Jet_GroundRoll')
+    print('TO_Dist_Jet_50ft')
+    print('TO_Dist_Jet_2eng_BFL')
+    print('TO_Dist_Jet_3eng_BFL')
+    print('TO_Dist_Jet_4eng_BFL')
 criteria = input('Copy the takeoff criteria from the list above: ')
 distance = float(input('Enter the desired takeoff distance in feet: '))
-
-def valid_indices(x):
-    return np.nonzero(~np.isnan(x))
 
 # Valid indices of this takeoff distance criteria
 criteria_indices = valid_indices(locals()[criteria])
@@ -184,3 +183,43 @@ popt, pcov = curve_fit(func, y, x)
 
 # TOP value based on fitted function
 TOP = popt[0] * distance**2 + popt[1] * distance + popt[2]
+
+## Stall Speed ##
+
+if AR >= 4 or AR <= 8:
+    # Load and extract max CL data
+    maxCL_data = np.genfromtxt('MaximumLiftCoef_moderateAR.csv', delimiter=',', skip_header=1, invalid_raise=False)
+    sweep = maxCL_data[:,0]
+    no_flap = maxCL_data[:,1]
+    plain_flap = maxCL_data[:,2]
+    slotted_flap = maxCL_data[:,3]
+    fowler_flap = maxCL_data[:,4]
+    double_slotted_flap = maxCL_data[:,5]
+    double_slotted_flap_slat = maxCL_data[:,6]
+    triple_slotted_flap_slat = maxCL_data[:,7]
+    
+    print('no_flap')
+    print('plain_flap')
+    print('slotted_flap')
+    print('fowler_flap')
+    print('double_slotted_flap')
+    print('double_slotted_flap_slat')
+    print('triple_slotted_flap_slat')
+    flap_type = input('Copy the flap type from the list above: ')
+    # Valid indices of this flap type
+    flap_type_indices = valid_indices(locals()[flap_type])
+    
+    sweep_angle = float(input('Enter the quarter chord sweep angle of the wing: '))
+    # Value of valid indices
+    x = sweep[flap_type_indices]
+    y = locals()[flap_type][flap_type_indices]
+    
+    # Fit curve to valid data
+    popt, pcov = curve_fit(func, y, x)
+    
+    # TOP value based on fitted function
+    CL_max = popt[0] * sweep_angle**2 + popt[1] * sweep_angle + popt[2]
+else:
+    
+    CL_max = 0.9 * Cl_max * math.cos(math.radians(sweep_angle))
+W_S = 0.5 * rho * V_stall**2 * S * CL_max
