@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Apr 27 14:38:18 2023
-
+A script to calculate the Takeoff Parameter of an aircraft with a certain 
+takeoff criteria.
 @author: ardya
 """
 import numpy as np
@@ -50,3 +51,4 @@ popt, pcov = curve_fit(func, y, x)
 
 # TOP value based on fitted function
 TOP = popt[0] * distance**2 + popt[1] * distance + popt[2]
+print(f'TOP = {TOP:.0f}')
