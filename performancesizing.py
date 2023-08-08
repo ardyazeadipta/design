@@ -41,7 +41,7 @@ def AirDensity(altitude, deltaT):
     rho = sigma * rho0
     return rho0, rho, sigma
 
-def StallWingLoading(altitude, Vs, CLmax):
+def StallWingLoading(altitude, deltaT, Vs, CLmax):
     """
     Function to calculate the wing loading of the aircraft based on its intended stall speed and altitude.
 
@@ -60,7 +60,7 @@ def StallWingLoading(altitude, Vs, CLmax):
         Wing loading of the aircraft in lb/ft2.
 
     """
-    rho0, rho, sigma = AirDensity(altitude, 0)
+    rho0, rho, sigma = AirDensity(altitude, deltaT)
     rho = rho * 0.0019403203 # convert from kg/m3 to slug/ft3
     q = .5 * rho * Vs**2
     
@@ -121,7 +121,7 @@ def TOP():
     TOP = popt[0] * distance**2 + popt[1] * distance + popt[2]
     return TOP
 
-def TakeoffWingLoading(TOP, altitude, deltaT, CLTO, W_P):
+def TakeoffWingLoading(TOP, altitude, deltaT, CLTO, W_S):
     """
     Function to calculate the required wing loading for takeoff for a given power loading.
 
@@ -135,19 +135,19 @@ def TakeoffWingLoading(TOP, altitude, deltaT, CLTO, W_P):
         Difference in sea level temperature from ISA standard of 15 degrees C.
     CLTO : float
         Lift coefficient at takeoff, typically maximum wing lift coefficient divided by 1.21.
-    W_P : float or array of floats
-        Power loading of the aircraft in lb/hp.
+    W_S : float or array of floats
+        Wing loading of the aircraft in lb/ft2.
 
     Returns
     -------
-    W_Stakeoff : float or array of floats
-        Wing loading required for takeoff requirements in lb/ft2.
+    W_P : float or array of floats
+        Power loading required for takeoff requirements in lb/hp.
 
     """
     rho0, rho, sigma = AirDensity(altitude, deltaT)
     
-    W_Stakeoff = TOP * sigma * CLTO * (1/W_P)
-    return W_Stakeoff
+    W_P = TOP * sigma * CLTO * (1/W_S)
+    return W_P
 
 def LandingWingLoading(Slanding, Sa, altitude, deltaT, CLmax):
     """
@@ -177,7 +177,7 @@ def LandingWingLoading(Slanding, Sa, altitude, deltaT, CLmax):
     W_Slanding = (Slanding - Sa) * sigma * CLmax / 80
     return W_Slanding
 
-def CruiseWingLoading(altitude, Vcruise, AR, e, CD0):
+def CruiseWingLoadingOpt(altitude, Vcruise, AR, e, CD0):
     """
     Function to calculate wing loading required to maximize cruise range in a given cruise speed.
 
@@ -199,7 +199,7 @@ def CruiseWingLoading(altitude, Vcruise, AR, e, CD0):
     Returns
     -------
     W_Scruise : float
-        Wing loading required for cruise requirements in lb/ft2.
+        Wing loading required to optimize for cruise requirements in lb/ft2.
 
     """
     rho0, rho, sigma = AirDensity(altitude, 0)
@@ -209,7 +209,7 @@ def CruiseWingLoading(altitude, Vcruise, AR, e, CD0):
     W_Scruise = q * (np.pi*AR*e*CD0)**0.5
     return W_Scruise
 
-def LoiterWingLoading(altitude, Vloiter, AR, e, CD0):
+def LoiterWingLoadingOpt(altitude, Vloiter, AR, e, CD0):
     """
     Function to calculate wing loading required to optimize loiter/minimum power required in a given loiter speed.
     
@@ -231,7 +231,7 @@ def LoiterWingLoading(altitude, Vloiter, AR, e, CD0):
     Returns
     -------
     W_Sloiter : float
-        Wing loading required for loiter requirements in lb/ft2.
+        Wing loading required to optimize for loiter requirements in lb/ft2.
 
     """
     rho0, rho, sigma = AirDensity(altitude, 0)
@@ -299,6 +299,8 @@ def SustainedTurnWingLoading(altitude, Vturn, n, AR, e, CD0, W_P):
         
     """
     rho0, rho, sigma = AirDensity(altitude, 0)
+    rho = rho * 0.0019403203 # convert from kg/m3 to slug/ft3
+
     q = 0.5 * rho * Vturn**2
     propeff = .8 # propeller efficiency assumed 0.8
     T_W = 550 * propeff/Vturn * 1/W_P
@@ -306,7 +308,7 @@ def SustainedTurnWingLoading(altitude, Vturn, n, AR, e, CD0, W_P):
     W_Ssustainedturn = (T_W + (T_W**2 - (4*n**2*CD0/(np.pi*AR*e))**.5)/(2*n**2/(q*np.pi*AR*e)))
     return W_Ssustainedturn
 
-def ClimbWingLoading(G, Vclimb, AR, e, CD0, W_P):
+def ClimbWingLoading(G, Vclimb, AR, e, CD0, W_S):
     """
     Function to calculate wing loading required to satisfy climb gradient in a given horizontal speed.
 
@@ -322,24 +324,26 @@ def ClimbWingLoading(G, Vclimb, AR, e, CD0, W_P):
         Oswald span efficiency factor, approximately 0.6 to 0.8 for fighter, and 0.8 for other aircraft.
     CD0 : float
         Zero-lift drag coefficient, approximately 0.015 for jet, 0.02 for clean propeller, 0.03 for fixed gear propeller.
-    W_P : float
-        Power loading, in lb/hp. Set to zero if calculating glide.
+    W_S : float
+        Wing loading, in lb/ft.
 
     Returns
     -------
-    W_Sclimb : float
-        Wing loading required for climb requirements in lb/ft2.
+    W_P : float
+        Power loading required for climb requirements in lb/hp.
 
     """
     rho0, rho, sigma = AirDensity(0, 0)
+    rho = rho * 0.0019403203 # convert from kg/m3 to slug/ft3
+
     q = 0.5 * rho * Vclimb**2
     propeff = .8 # propeller efficiency assumed 0.8
-    T_W = 550 * propeff/Vclimb * 1/W_P
+    T_W = (q*CD0/W_S) + (W_S/(q*np.pi*AR*e)) + G
+    W_P = 550 * propeff/Vclimb * 1/T_W
     
-    W_Sclimb = ((T_W - G) + ((T_W - G)**2 - (4*CD0/(np.pi*AR*e))**.5)/(2/(q*np.pi*AR*e)))
-    return W_Sclimb
+    return W_P
 
-def CeilingWingLoading(altitude, Vceiling, AR, e, CD0, W_P):
+def CeilingWingLoading(altitude, Vceiling, AR, e, CD0, W_S):
     """
     Function to calculate wing loading required to fly at a certain speed and maximum altitude.
 
@@ -355,21 +359,23 @@ def CeilingWingLoading(altitude, Vceiling, AR, e, CD0, W_P):
         Oswald span efficiency factor, approximately 0.6 to 0.8 for fighter, and 0.8 for other aircraft.
     CD0 : float
         Zero-lift drag coefficient, approximately 0.015 for jet, 0.02 for clean propeller, 0.03 for fixed gear propeller.
-    W_P : float
-        Power loading, in lb/hp.
+    W_S : float
+        Wing loading, in lb/ft2.
 
     Returns
     -------
-    W_Sceiling : float
-        Wing loading required for maximum ceiling requirements in lb/ft2.
+    W_P : float
+        Power loading required for maximum ceiling requirements in lb/hp.
 
     """
-    rho0, rho, sigma = AirDensity(0, 0)
+    rho0, rho, sigma = AirDensity(altitude, 0)
+    rho = rho * 0.0019403203 # convert from kg/m3 to slug/ft3
+
     q = 0.5 * rho * Vceiling**2
     propeff = .8 # propeller efficiency assumed 0.8
     G = (100/60) / Vceiling
-    T_W = 550 * propeff/Vceiling * 1/W_P
     
-    W_Sceiling =  ((T_W - G) + ((T_W - G)**2 - (4*CD0/(np.pi*AR*e))**.5)/(2/(q*np.pi*AR*e)))
-    return W_Sceiling
-
+    T_W = (q*CD0/W_S) + (W_S/(q*np.pi*AR*e)) + G
+    W_P = 550 * propeff/Vceiling * 1/T_W
+    
+    return W_P
